@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "header-fetcher"
+version = "0.1.0"
+description = ""
+authors = ["Michael <mpgg2000@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+aiohttp = "^3.8.3"
+uvicorn = {extras = ["standart"], version = "^0.20.0"}
+fastapi = "^0.89.1"
+
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.2.1"
+httpx = "^0.23.3"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
