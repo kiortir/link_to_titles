@@ -1,58 +1,39 @@
-FROM python:3.11.0 as python-base
+FROM python:3.11-alpine3.17 as python-base
 
-ENV PYTHONUNBUFFERED=1 \
-    # prevents python creating .pyc files
+ENV \
+    PYTHONPATH=/app/src/ \
+    PATH=/app/src/:$PATH \
+    PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    \
-    # pip
     PIP_NO_CACHE_DIR=off \
     PIP_DISABLE_PIP_VERSION_CHECK=on \
-    PIP_DEFAULT_TIMEOUT=100 \
-    \
-    # poetry
-    # https://python-poetry.org/docs/configuration/#using-environment-variables
-    POETRY_VERSION=1.2.2 \
-    # make poetry install to this location
-    POETRY_HOME="/opt/poetry" \
-    # make poetry create the virtual environment in the project's root
-    # it gets named `.venv`
-    POETRY_VIRTUALENVS_IN_PROJECT=true \
-    # do not ask any interactive question
-    POETRY_NO_INTERACTION=1 \
-    \
-    # paths
-    # this is where our requirements + virtual environment will live
-    PYSETUP_PATH="/opt/pysetup" \
-    VENV_PATH="/opt/pysetup/.venv"
+    PIP_DEFAULT_TIMEOUT=100 
+
+ENV \
+    POETRY_VERSION=1.3.2 \
+    # Это же сработает вмето последующего "poetry config virtualenvs.create false" ?
+    POETRY_VIRTUALENVS_IN_PROJECT=false \ 
+    POETRY_NO_INTERACTION=1 
 
 
-# prepend poetry and venv to path
-ENV PATH="$POETRY_HOME/bin:$VENV_PATH/bin:$PATH"
+### poetry
+FROM python-base as poetry
+WORKDIR /tmp
 
+# RUN curl -sSL https://install.python-poetry.org | python3 -
+RUN pip install "poetry==$POETRY_VERSION"
 
-# `builder-base` stage is used to build deps + create our virtual environment
-FROM python-base as builder-base
-RUN apt-get update \
-    && apt-get install --no-install-recommends -y \
-    # deps for installing poetry
-    curl \
-    # deps for building python deps
-    build-essential
-
-# install poetry - respects $POETRY_VERSION & $POETRY_HOME
-RUN curl -sSL https://install.python-poetry.org | python3 -
-
-# copy project requirement files here to ensure they will be cached.
-WORKDIR $PYSETUP_PATH
 COPY poetry.lock pyproject.toml ./
+RUN poetry export --without-hashes -o /tmp/requirements.txt
 
-# install runtime deps - uses $POETRY_VIRTUALENVS_IN_PROJECT internally
-RUN poetry install --only main
 
-FROM python-base as production
-ENV FASTAPI_ENV=production
-COPY --from=builder-base $PYSETUP_PATH $PYSETUP_PATH
-RUN echo $(ls -a)
-COPY ./header_fetcher /code/header_fetcher
-WORKDIR /code
-CMD ["uvicorn", "header_fetcher.main:app", "--host", "0.0.0.0", "--port", "80"]
+FROM python-base as runtime
+WORKDIR /app
+
+COPY --from=poetry /tmp/requirements.txt ./
+RUN pip3 install -r requirements.txt
+COPY . /app
+
+# вообще, я ориентировался на https://stackoverflow.com/questions/72284462/cmd-in-dockerfile-vs-command-in-docker-compose-yml
+# точно ли реюзабельность образа падает при CMD, если в compose можно это заместить?
+# CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "80"]
