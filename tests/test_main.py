@@ -1,19 +1,21 @@
-from header_fetcher.main import app
+from src.main import app
 from fastapi.testclient import TestClient
 
 client = TestClient(app)
 
-test_links = {
-    "links": [
-        "https://google.com",
-        "https://ya.ru",
-        "https://unirock.ru",
-        "https://habr.ru",
-    ]
-}
+tested_links = {
+        "links": [
+            {"url": "https://google.com", "title": "Google"},
+            {"url": "https://ya.ru", "title": "Ой!"}, # иногда шалит и возвращает null, иногда - Ой
+            {
+                "url": "https://unirock.ru",
+                "title": "Изделия из искусственного и натурального камня — Unirock",
+            },
+            {"url": "https://habr.ru", "title": "All posts in a row / Habr"},
+        ]
+    }
 
-def test_title_fetcher():
-    response = client.post("/titles", 
-        json = test_links
-    )
-    print(response.text)
+
+def test_title_fetcher() -> None:
+    response = client.post("/titles", json={"links": [link["url"] for link in tested_links["links"]]})
+    assert response.json() == tested_links
