@@ -29,7 +29,7 @@ HEADER_REGEXP = re.compile(r"(?:<head(?:.*)>)((?:.|\n)*)(?:<\/head>)")
 TITLE_REGEXP = re.compile(r"(?:<title(?:.*)>)((?:.|\n)*)(?:<\/title>)")
 
 
-async def map_title_to_link(link: str, session: aiohttp.ClientSession) -> LinkWithTitle:
+async def map_title_to_link(link: str, session: aiohttp.ClientSession) -> str | None:
 
     response = await session.get(link) # проверять ли content-type?
     content = await response.text()
@@ -38,15 +38,15 @@ async def map_title_to_link(link: str, session: aiohttp.ClientSession) -> LinkWi
     return {"url": link, "title": title}
 
 
-def get_title(content: str) -> str | None:
-    head_content_match: re.Match[str] | None = HEADER_REGEXP.search(
+def get_title(content: str) -> LinkWithTitle:
+    head_content_match: re.Match = HEADER_REGEXP.search(
         content
     )  # что делать, если title не в head? нужно ли на это вообще обращать внимание?
     if not head_content_match:
-        return None
-    title_content_match: re.Match[str] | None = TITLE_REGEXP.search(head_content_match.group(0))
+        return
+    title_content_match: re.Match = TITLE_REGEXP.search(head_content_match.group(0))
     if not title_content_match:
-        return None
+        return
     return title_content_match.group(1)
 
 
@@ -55,6 +55,6 @@ async def get_titles(payload: LinksPayload):
 
     async with aiohttp.ClientSession() as session:
         futures = [map_title_to_link(url, session) for url in payload.links]
-        titled_links = await asyncio.gather(*futures)
+        titled_links = [await f for f in asyncio.as_completed(futures)]
 
     return LinksWithTitles(links=titled_links)
