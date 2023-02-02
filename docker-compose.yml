@@ -1,22 +1,12 @@
-version: '3.10'
-
-networks:
-  backend:
-    driver: bridge
+version: '3'
 
 services:
 
-  app:
+  header-fetcher:
+
     build:
       context: .
-      dockerfile: ./Dockerfile
+
     ports:
-      - 5000:5000
-    command: uvicorn asgi:app --host 0.0.0.0 --port 5000
-
-
-  runner:
-    command: pytest -s
-    build:
-      context: .
-      dockerfile: ./Dockerfile
+    - 5000:80
+    restart: always
