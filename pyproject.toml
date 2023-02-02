@@ -15,6 +15,7 @@ fastapi = "^0.89.1"
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.1"
 httpx = "^0.23.3"
+mypy = "^0.991"
 
 [build-system]
 requires = ["poetry-core"]
