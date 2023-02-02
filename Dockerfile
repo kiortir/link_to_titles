@@ -1,4 +1,4 @@
-FROM python:3.11-alpine3.17 as python-base
+FROM python:3.11-alpine as python-base
 
 ENV \
     PYTHONPATH=/app/src/ \
@@ -24,7 +24,7 @@ WORKDIR /tmp
 RUN pip install "poetry==$POETRY_VERSION"
 
 COPY poetry.lock pyproject.toml ./
-RUN poetry export --without-hashes -o /tmp/requirements.txt
+RUN poetry export --dev --without-hashes -o /tmp/requirements.txt
 
 
 FROM python-base as runtime
@@ -33,7 +33,3 @@ WORKDIR /app
 COPY --from=poetry /tmp/requirements.txt ./
 RUN pip3 install -r requirements.txt
 COPY . /app
-
-# вообще, я ориентировался на https://stackoverflow.com/questions/72284462/cmd-in-dockerfile-vs-command-in-docker-compose-yml
-# точно ли реюзабельность образа падает при CMD, если в compose можно это заместить?
-# CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "80"]
