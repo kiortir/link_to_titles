@@ -25,9 +25,9 @@ jobs:
         uses: appleboy/scp-action@master
 
         env:
-          HOST: $HOST
+          HOST: ${{ vars.HOST }}
           USERNAME: ${{ secrets.USERNAME }}
-          PORT: $SSH_PORT
+          PORT: ${{ vars.SSH_PORT }}
           KEY: ${{ secrets.SSH_KEY }}
 
         with:
@@ -40,9 +40,9 @@ jobs:
         uses: appleboy/ssh-action@master
 
         with:
-          HOST: $HOST
+          HOST: ${{ vars.HOST }}
           USERNAME: ${{ secrets.USERNAME }}
-          PORT: $SSH_PORT
+          PORT: ${{ vars.SSH_PORT }}
           KEY: ${{ secrets.SSH_KEY }}
 
           script: docker compose up -f /srv/www/link_to_titles/docker-compose.yml --build -d
