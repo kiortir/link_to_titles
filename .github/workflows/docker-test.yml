@@ -2,21 +2,49 @@ name: Docker Image CI
 
 on:
   push:
-    branches: [ "shadow_main", "iterations" ]
+    branches: ["shadow_main", "iterations"]
   pull_request:
-    branches: [ "shadow_main" ]
+    branches: ["shadow_main"]
 
 jobs:
-
   test:
-  
     runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v3
-    - name: Run pytest
-      run: docker compose up runner --build
 
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run pytest
+        run: docker compose up runner --build
+
+  deploy:
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Copy project
+
+        uses: appleboy/scp-action@master
+
+        env:
+          HOST: $HOST
+          USERNAME: ${{ secrets.USERNAME }}
+          PORT: $PORT
+          KEY: ${{ secrets.SSH_KEY }}
+
+        with:
+          source: "."
+
+          target: "/srv/www/link_to_titles"
+
+      - name: Executing remote command
+
+        uses: appleboy/ssh-action@master
+
+        with:
+          HOST: $HOST
+          USERNAME: ${{ secrets.USERNAME }}
+          PORT: $PORT
+          KEY: ${{ secrets.SSH_KEY }}
+
+          script: docker compose up -f /srv/www/link_to_titles/docker-compose.yml --build -d
 #   build:
 
 #     runs-on: ubuntu-latest
