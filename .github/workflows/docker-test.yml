@@ -45,7 +45,7 @@ jobs:
           PORT: ${{ vars.SSH_PORT }}
           KEY: ${{ secrets.SSH_KEY }}
 
-          script: docker compose -f /srv/www/link_to_titles/docker-compose.yml --build -d up
+          script: docker compose -f /srv/www/link_to_titles/docker-compose.yml up --build -d
 #   build:
 
 #     runs-on: ubuntu-latest
