@@ -3,4 +3,6 @@ venv/
 __pycache__/
 .vscode/
 mypy.ini
-./media
+media/
+docker/
+.env
