@@ -9,14 +9,22 @@ packages = [{include = "header-fetcher"}]
 [tool.poetry.dependencies]
 python = "^3.10"
 aiohttp = "^3.8.3"
-uvicorn = {extras = ["standart"], version = "^0.20.0"}
 fastapi = "^0.89.1"
+uvicorn = "^0.20.0"
+psycopg = {extras = ["binary", "pool"], version = "^3.1.8"}
+yoyo-migrations = "^8.2.0"
+bs4 = "^0.0.1"
+lxml = "^4.9.2"
+aiofiles = "^22.1.0"
 
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.1"
 httpx = "^0.23.3"
 mypy = "^0.991"
+types-aiofiles = "^22.1.0.6"
+pytest-asyncio = "^0.20.3"
+
 
 [build-system]
 requires = ["poetry>=1.3.2"]

@@ -1,8 +1,8 @@
 version: '3.10'
 
-networks:
-  backend:
-    driver: bridge
+volumes:
+   pg-data:
+
 
 services:
 
@@ -12,11 +12,51 @@ services:
       dockerfile: ./Dockerfile
     ports:
       - 5000:5000
-    command: uvicorn asgi:app --host 0.0.0.0 --port 5000
+    command: uvicorn asgi:app --host 0.0.0.0 --port 5000 --workers 2
+    environment:
+      - media_path=/srv/media
+      - media_root=/media/
+      - DB_PORT=5432
+      - DB_HOST=postgres
+    volumes:
+      - ./media:/srv/media
+    depends_on:
+      postgres:
+        condition: service_healthy
 
+  postgres:
+    image: postgres
+    environment:
+      POSTGRES_DB: docker
+      POSTGRES_USER: docker
+      POSTGRES_PASSWORD: docker
+      PGDATA: "/var/lib/postgresql/data/pgdata"
+    ports:
+      - "6666:5432"
+    volumes:
+      - ./docker/service/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docker"]
+      interval: 2s
+      timeout: 5s
+      retries: 5
+
+  migration:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    # command: echo "$PWD"
+    command: yoyo apply --config ./yoyo.ini
+    volumes:
+      - .:/src
+    links:
+      - postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   runner:
-    command: pytest -s
+    command: python -m pytest -s
     build:
       context: .
       dockerfile: ./Dockerfile

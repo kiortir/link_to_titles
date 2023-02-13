@@ -32,4 +32,4 @@ WORKDIR /app
 
 COPY --from=poetry /tmp/requirements.txt ./
 RUN pip3 install -r requirements.txt
-COPY . /app
+COPY ./src /app
