@@ -21,7 +21,7 @@ async def process_urls(
 ) -> dict[str, str]:
     session_id = await postgres.create_session()
     background_tasks.add_task(service.process_links, payload.links, session_id)
-    return {"url": URLs.session.format(session_id=session_id)}  # type: ignore
+    return {"url": URLs.session.format(session_id=session_id)} 
 
 
 @router.get(URLs.session)

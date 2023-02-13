@@ -20,7 +20,8 @@ class ImageBase(BaseModel):
     ext: str = ""
 
     def get_path(self) -> Path:
-        return settings.media_path / (str(self.id) + self.ext)
+        path: Path = settings.media_path / (str(self.id) + self.ext)
+        return path
 
 
 class ImageDB(ImageBase):
