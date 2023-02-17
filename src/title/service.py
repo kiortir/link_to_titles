@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from pathlib import Path
-from typing import Any, AsyncIterator, cast
+from typing import Any, AsyncGenerator, AsyncIterator, cast, Callable, TypeVar
 from uuid import UUID
 
 import aiofiles
@@ -11,107 +11,126 @@ from bs4 import BeautifulSoup
 from pydantic import AnyHttpUrl
 
 from settings import settings
-from title import entity, postgres, service_image
+from src.title import repository
+from title import entity, service_image
 from title.service_aiohttp import fetch
+
+import re
+import base64
+import mimetypes
 
 logger = logging.getLogger("title")
 
 
-async def save_file(fp: str | Path, obj_stream: AsyncIterator[bytes]) -> None:
-    async with aiofiles.open(fp, mode="wb") as f:
-        async for chunk in obj_stream:
-            await f.write(chunk)
+def get_title(
+    soup: BeautifulSoup, unit: entity.PageContent
+) -> tuple[BeautifulSoup, entity.PageContent]:
+
+    title = soup.find("title")
+    if title:
+        unit.title = title.text
+
+    return soup, unit
 
 
-def normalize_url(url: str, origin_url: AnyHttpUrl) -> AnyHttpUrl | str:
-    if url.startswith("data"):
-        return url
+def get_imgs(
+    soup: BeautifulSoup, unit: entity.PageContent
+) -> tuple[BeautifulSoup, entity.PageContent]:
+    ...
 
-    url_obj = yarl.URL(url)
-
-    if not url_obj.is_absolute():
-        origin = yarl.URL(origin_url)
-        origin_host = origin.host
-        if origin.host:
-            url_obj = origin.join(url_obj)
-
-    return cast(AnyHttpUrl, str(url_obj.with_scheme(scheme="https")))
+    return soup, unit
 
 
-def parse_page(page: str, page_url: AnyHttpUrl) -> entity.PageContent:
+def get_extractor(
+    *functions: Callable[
+        [BeautifulSoup, entity.PageContent], tuple[BeautifulSoup, entity.PageContent]
+    ]
+) -> Callable[[BeautifulSoup, entity.PageContent], entity.PageContent]:
+    def wrapper(soup: BeautifulSoup, unit: entity.PageContent) -> entity.PageContent:
+        for f in functions:
+            soup, unit = f(soup, unit)
+
+        return unit
+
+    return wrapper
+
+
+def parse_page(page: str) -> entity.PageContent:
 
     soup = BeautifulSoup(page, "lxml")
+    parsed_page = entity.PageContent(title=None, image_sources=[])
 
-    title = t.text if (t := soup.find("title")) else None
+    extractor = get_extractor(get_title, get_imgs)
 
-    sources: list[str] = []
-    for img in soup.find_all("img"):
-        sources.extend(service_image.extract_img_sources(img))
-    sources = [normalize_url(src, page_url) for src in sources]
-
-    return entity.PageContent(title=title, image_sources=sources)
+    return extractor(soup, parsed_page)
 
 
-async def process_image(
-    image_source: AnyHttpUrl | str,
-    session: aiohttp.ClientSession,
-    processed_link_id: int,
-) -> None:
-
-    image = await postgres.create_image(image_source, processed_link_id)
-    if image_source.startswith("data"):
-        f = service_image.extraсt_data_from_base64
-    else:
-        f = service_image.extraсt_data_from_url
-
-    try:
-        ext, raw_image = await f(image_source, session)
-    except ValueError:
-        await postgres.update_image_status(image.id, entity.LinkStatus.ERROR)
-        logger.info(f"image {image_source} could not be fetched")
-        return
-
-    await postgres.update_image_ext(image.id, ext)
-    image.ext = ext
-    await save_file(image.get_path(), raw_image)
-    await postgres.update_image_status(image.id, entity.LinkStatus.DONE)
-    logger.info(f"image {image_source} saved")
+async def fetch(url: str | yarl.URL) -> aiohttp.ClientResponse:
+    url = str(url)
+    ...
 
 
-async def process_link(
-    link: AnyHttpUrl, session: aiohttp.ClientSession, request_session_id: UUID
-) -> None:
+async def process_url(url: yarl.URL) -> None:
 
-    response = await fetch(link, session, retries=3)
+    url_response = await fetch(str(url))
+    url_content = await url_response.text()
+    parsed_content = parse_page(url_content)
+
+    id = await repository.create_processed_link(str(url))
+
+    for image in parsed_content.image_sources:
+        ...
+
+
+def normalize_url(url: str | yarl.URL) -> yarl.URL:
+
+    return yarl.URL()
+
+
+async def aiterify(b: bytes) -> AsyncGenerator[bytes, None]:
+    yield b
+
+
+async def extraсt_data_from_base64(source: str) -> tuple[str, AsyncIterator[bytes]]:
+    match = re.match("^data:image/(.+);base64,(.*)", source)
+    if not match:
+        raise ValueError
+
+    ext, c = match.groups()
+    r = base64.b64decode(c)
+    return "." + ext, aiterify(r)
+
+
+async def guess_ext(url: yarl.URL, content_type: str | None) -> str:
+    if content_type and (ext := mimetypes.guess_extension(content_type)):
+        return ext
+
+    return "." + url.suffix
+
+
+async def extraсt_data_from_url(
+    source: yarl.URL,
+) -> tuple[str, AsyncIterator[bytes]]:
+
+    response = await fetch(source)
 
     if not response:
-        return
+        raise ValueError
 
-    if response.headers.get("content-type") != "text/html":
-        logger.warning(f"{link} response is probably not an html")
+    content_type = response.headers.get("content-type")
+    ext = await guess_ext(source, content_type)
 
-    processed_link_id = await postgres.create_processed_link(link)
-    await postgres.create_session_link_relation(request_session_id, processed_link_id)
-
-    response_content = await response.text()
-
-    page_content = parse_page(response_content, link)
-
-    if page_content.title is not None:
-        await postgres.set_link_title(processed_link_id, page_content.title)
-
-    await postgres.unbind_images(processed_link_id)
-
-    async with asyncio.TaskGroup() as tg:
-        for image_source in page_content.image_sources:
-            tg.create_task(process_image(image_source, session, processed_link_id))
-
-    await postgres.update_link_status(processed_link_id, entity.LinkStatus.DONE)
+    return ext, response.content.iter_any()
 
 
-async def process_links(links: list[AnyHttpUrl], request_session_id: UUID) -> None:
-    async with aiohttp.ClientSession() as session:
-        async with asyncio.TaskGroup() as tg:
-            for link in links:
-                tg.create_task(process_link(link, session, request_session_id))
-    logger.info(f"Session {request_session_id} done")
+async def process_image_source(
+    source: str, origin: yarl.URL, related_link_id: int
+) -> None:
+
+    if source.startswith("data"):
+        ext, img_obj = await extraсt_data_from_base64(source)
+    else:
+        normalized_source = normalize_url(source)
+        ext, img_obj = await extraсt_data_from_url(normalized_source)
+
+    await repository.create_image(str(origin), related_link_id)
