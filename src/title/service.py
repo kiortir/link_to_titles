@@ -13,7 +13,7 @@ from pydantic import AnyHttpUrl
 from settings import settings
 from src.title import repository
 from title import entity, service_image
-from title.service_aiohttp import fetch
+from redis_client import queue
 
 import re
 import base64
@@ -21,6 +21,12 @@ import mimetypes
 
 logger = logging.getLogger("title")
 
+import os
+@queue.task()
+async def queue_test(message = "test") -> None:
+    # await asyncio.sleep(2)
+    # print("Выполняется задача в ", os.getpid())
+    print(message, os.getpid())
 
 def get_title(
     soup: BeautifulSoup, unit: entity.PageContent
